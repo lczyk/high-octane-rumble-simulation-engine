@@ -104,27 +104,27 @@ def signed_integer_to_word(signed_integer: SignedInteger, /) -> Word:
 
 @dataclasses.dataclass
 class RegisterMappingWrapper(MutableMapping[Register, Word]):
-    wrapped_mapping: MutableMapping[Register, Word]
+    _data: list[Word]
 
     def __post_init__(self) -> None:
-        self.wrapped_mapping[Register.ZERO_REGISTER] = Word(0)
+        self._data[Register.ZERO_REGISTER.value] = Word(0)
 
     def __getitem__(self, key: Register) -> Word:
-        return self.wrapped_mapping[key]
+        return self._data[key.value]
 
     def __setitem__(self, key: Register, value: Word) -> None:
         if key != Register.ZERO_REGISTER:
-            self.wrapped_mapping[key] = value
+            self._data[key.value] = value
 
     def __delitem__(self, key: Register) -> None:
         if key != Register.ZERO_REGISTER:
-            del self.wrapped_mapping[key]
+            del self._data[key.value]
 
     def __len__(self) -> int:
-        return len(self.wrapped_mapping)
+        return len(self._data)
 
     def __iter__(self) -> Iterator[Register]:
-        return iter(self.wrapped_mapping)
+        return iter(Register)
 
 
 _NAME_ALPHABET = string.ascii_letters + string.digits + "-_"
@@ -135,13 +135,14 @@ class Machine:
     name: str
     memory: MutableMapping[Address, Word]
     registers: MutableMapping[Register, Word] = dataclasses.field(
-        default_factory=lambda: {register: Word(0) for register in Register}
+        default_factory=lambda: RegisterMappingWrapper([Word(0)] * len(Register))
     )
     halted: bool = False
     logger: logging.Logger = dataclasses.field(default=logging.getLogger("horse"))
 
     def __post_init__(self) -> None:
-        self.registers = RegisterMappingWrapper(self.registers)
+        if not isinstance(self.registers, RegisterMappingWrapper):
+            self.registers = RegisterMappingWrapper(list(self.registers.values()))
 
         assert all(char in _NAME_ALPHABET for char in self.name), f"Invalid character in machine name: {self.name}"
         assert len(self.name) > 0, "Machine name must be non-empty"
