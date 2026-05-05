@@ -1,0 +1,25 @@
+no_op
+load R1 R2           ; Put 1 into R2
+load R1 R12          ; Put 2 into temp (R12)
+load R1 R13          ; Put 3 into temp (R13)
+no_op
+no_op
+no_op
+no_op
+no_op
+no_op
+no_op
+load R1 R14          ; Put 11 into temp (R14)
+multiply R12 R14 R12 ; 2x11 = 22 -> R12
+increment R12 R12    ; 22+1 = 23 -> R12
+multiply R13 R12 R3  ; 23*3 = 69 -> R3
+no_op
+load R1 R14          ; Load 16 into R2
+multiply R14 R14 R15 ; 16x16 = 256 -> R15 (Make halt)
+store R15 R14        ; Write halt behind yourself
+add R0 R1 R6         ; Store next address into R6
+multiply R2 R3 R4    ; Multiply counter (R2) by offset (R3) -> R4
+increment R2 R2      ; Increment counter (R2)
+add R1 R4 R4         ; Add the result (R4) to the current position (R1) and store into back into R4 
+store R4 R15         ; Halt->added from R4
+add R0 R6 R1         ; Jump to multiply ^
