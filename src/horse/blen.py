@@ -442,7 +442,19 @@ UNARY_OPERATIONS = {
 }
 
 
+_PARSE_CACHE: dict[Word, Instruction] = {}
+
+
 def parse(word: Word) -> Instruction:
+    cached = _PARSE_CACHE.get(word)
+    if cached is not None:
+        return cached
+    result = _parse_uncached(word)
+    _PARSE_CACHE[word] = result
+    return result
+
+
+def _parse_uncached(word: Word) -> Instruction:
     nibbles = horse.types.word_to_nibbles(word)
 
     try:
