@@ -1,4 +1,5 @@
 import argparse
+import array
 import dataclasses
 import logging
 import os.path as op
@@ -13,10 +14,13 @@ from horse.blen import Address
 from horse.types import Word
 
 
+_MEMORY_SIZE = 1 << horse.types.WORD_N_BITS
+
+
 @dataclasses.dataclass
 class VirtualMemory(MutableMapping[Address, Word]):
     offset: int
-    real_memory: MutableMapping[Address, Word]
+    real_memory: array.array  # 'H' (uint16), length _MEMORY_SIZE
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(offset={self.offset}, real_memory=...)"
@@ -25,19 +29,19 @@ class VirtualMemory(MutableMapping[Address, Word]):
         return Address(Word((virtual_address + self.offset) % (1 << horse.types.WORD_N_BITS)))
 
     def __getitem__(self, virtual_address: Address) -> Word:
-        return self.real_memory[self.real_address(virtual_address)]
+        return Word(self.real_memory[self.real_address(virtual_address)])
 
     def __setitem__(self, virtual_address: Address, value: Word) -> None:
         self.real_memory[self.real_address(virtual_address)] = value
 
     def __delitem__(self, virtual_address: Address) -> None:
-        del self.real_memory[self.real_address(virtual_address)]
+        self.real_memory[self.real_address(virtual_address)] = 0
 
     def __len__(self) -> int:
-        return len(self.real_memory)
+        return _MEMORY_SIZE
 
     def __iter__(self) -> Iterator[Address]:
-        return iter(self.real_memory)
+        return (Address(Word(i)) for i in range(_MEMORY_SIZE))
 
 
 def tournament(
@@ -48,7 +52,7 @@ def tournament(
     log: bool = True,
 ) -> None:
     """Runs a tournament and determines the winner."""
-    memory = {Address(Word(i)): Word(0) for i in range(1 << horse.types.WORD_N_BITS)}
+    memory: array.array = array.array("H", bytes(2 * _MEMORY_SIZE))
 
     random.seed(seed)
 
