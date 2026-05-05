@@ -170,11 +170,11 @@ class Machine:
     def tick(self) -> None:
         instruction_address = Address(self.registers[Register.PROGRAM_COUNTER])
 
-        self.logger.info(f"loading instruction at address {instruction_address}")
+        self.logger.info("loading instruction at address %s", instruction_address)
         instruction_as_word = self.memory[instruction_address]
         instruction = parse(instruction_as_word)
 
-        self.logger.info(f"executing instruction {instruction}")
+        self.logger.info("executing instruction %s", instruction)
         instruction_as_word = self.memory[instruction_address]
         instruction(self)
 
