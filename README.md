@@ -205,56 +205,37 @@ the compiler.
 
 ### Examples
 
-See [`examples/`](examples) for compilable sample programs. A program that
-slides down some no-ops before looping back to the top:
+Two ready-to-fight competitors live in [`examples/`](examples):
+
+- [`runner.bln`](examples/runner.bln) - a passive wanderer that drifts through
+  memory hoping nobody has dropped a halt in its path.
+- [`bomber.bln`](examples/bomber.bln) - builds the 16-bit halt encoding
+  (`256`) in a register, picks two address counters far from its own body,
+  and tight-loops storing halts across memory.
+
+Compile and rumble:
 
 ```
-; no_op does nothing
-no_op
-no_op
-no_op
-no_op
-no_op
-no_op
-no_op
-no_op
-; decrement R0 gives us -1, which we write to the program counter
-; after executing this instruction we increment the program counter
-; hence next loop will begin executing instruction 0, i.e. the first one
-decrement R0 PROGRAM_COUNTER
+uv run blenc --input examples/runner.bln --output runner.blc
+uv run blenc --input examples/bomber.bln --output bomber.blc
+uv run blen-rumble --seed 0 --max-steps 100000 --no-logs runner.blc bomber.blc
 ```
 
-A program fills the address space with halt, overwriting the other programs
-and causing them to halt:
+```
+runner won!
+```
+
+bomber's strategy depends heavily on where the random program placement drops
+each combatant; against a runner that walks straight into bomber's own loop
+body, bomber can end up running its own halts before runner does. try other
+seeds:
 
 ```
-; we will use R2 as the register containing the halt instruction
-; any integer that begins 00000001 will be treated as a halt
-; i.e. anything between 512 and 1023
-increment R2       ; R2 =           1 = 1
-increment R2       ; R2 =          10 = 2
-multiply R2 R2 R2  ; R2 =         100 = 4
-multiply R2 R2 R2  ; R2 =      1 0000 = 16
-multiply R2 R2 R2  ; R2 = 1 0000 0000 = 512
+uv run blen-rumble --seed 1 --max-steps 100000 --no-logs runner.blc bomber.blc
+```
 
-; we will use R3 as the address to write to
-; needs to be after our program
-; our program has 15 instructions, so 16 is a good place to start :)
-increment R3 R3      ; R3 = 1
-increment R3 R3      ; R3 = 2
-multiply R3 R3 R3    ; R3 = 4
-multiply R3 R3 R3    ; R3 = 16
-
-; we will use R4 as the jump-back register
-; tells us how long our loop is so we can reset the program counter
-increment R4 R4      ; R4 = 1
-increment R4 R4      ; R4 = 2
-increment R4 R4      ; R4 = 3
-
-; now we do a tight loop to minimize our exposure
-store R3 R2      ; put the value in R2 (halt) at memory address R3
-increment R3 R3  ; increment the address to which we write
-subtract PROGRAM_COUNTER R4 PROGRAM_COUNTER  ; loop!!!
+```
+It was a draw between the following: runner, bomber
 ```
 
 ### FAQ: How do I do X?

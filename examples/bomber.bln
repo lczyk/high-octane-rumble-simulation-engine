@@ -1,0 +1,38 @@
+; bomber: writes halt instructions across memory until everyone else halts.
+;
+; halt has opcode 0, sub-opcode 1, so its 16-bit encoding is 0000_0001_0000_0000
+; = 256. we build 256 in R2 (the payload) and seed two address counters R3, R4
+; well clear of our 19-instruction body. the loop writes a halt at each
+; counter, advances both, and jumps back. covering memory from two ends at
+; once doubles the kill rate.
+
+; build halt-instruction word in R2 (= 256)
+increment R0 R2     ; R2 = 1
+increment R2 R2     ; R2 = 2
+multiply R2 R2 R2   ; R2 = 4
+multiply R2 R2 R2   ; R2 = 16
+multiply R2 R2 R2   ; R2 = 256
+
+; first counter R3 = 256 (writes from low addresses upward)
+increment R0 R3     ; R3 = 1
+increment R3 R3     ; R3 = 2
+multiply R3 R3 R3   ; R3 = 4
+multiply R3 R3 R3   ; R3 = 16
+multiply R3 R3 R3   ; R3 = 256
+
+; second counter R4 = 32768 = 2^15 (writes from mid memory upward)
+increment R0 R4     ; R4 = 1
+increment R4 R4     ; R4 = 2
+increment R4 R4     ; R4 = 3
+multiply R4 R4 R4   ; R4 = 27
+multiply R4 R4 R4   ; R4 = 19683 (close enough; covers a different region)
+
+; remember loop start
+add R0 R1 R6        ; R6 = PC of this instruction
+
+; loop body: write halt at both counters, advance, jump back
+store R3 R2         ; mem[R3] = halt
+store R4 R2         ; mem[R4] = halt
+increment R3 R3     ; R3++
+increment R4 R4     ; R4++
+add R0 R6 R1        ; jump back

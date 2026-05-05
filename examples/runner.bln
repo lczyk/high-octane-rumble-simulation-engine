@@ -1,0 +1,20 @@
+; runner: passive wanderer. drifts forward through memory, looping back when
+; the program counter wraps, hoping nobody has dropped a halt in its path.
+;
+; the noop slide is the whole strategy. after the eighth noop, the program
+; counter is incremented one more time and we fall off the end of our own
+; instructions. memory is mostly zeros (= noop encoding), so we keep drifting,
+; eventually wrapping the address space and ticking back into our own slide.
+;
+; runner makes no attempt to attack. wins by outlasting opponents that halt
+; themselves; loses to anyone (e.g. bomber) writing halts into the memory it
+; eventually reads.
+
+no_op
+no_op
+no_op
+no_op
+no_op
+no_op
+no_op
+no_op
