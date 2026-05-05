@@ -133,3 +133,15 @@ dmypy.json
 
 # pytype static type analyzer
 .pytype/
+
+# ruff
+.ruff_cache/
+
+# editors
+.vscode/
+
+# macos
+.DS_Store
+
+# compiled blen artefacts
+*.blc
