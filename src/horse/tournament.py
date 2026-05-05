@@ -2,6 +2,7 @@ import argparse
 import array
 import dataclasses
 import logging
+import multiprocessing
 import os.path as op
 import random
 import struct
@@ -50,8 +51,9 @@ def tournament(
     max_steps: int,
     *,
     log: bool = True,
-) -> None:
-    """Runs a tournament and determines the winner."""
+    quiet: bool = False,
+) -> list[str]:
+    """Runs a tournament and returns the winner names (empty = no winner, >1 = draw)."""
     memory: array.array = array.array("H", bytes(2 * _MEMORY_SIZE))
 
     random.seed(seed)
@@ -88,16 +90,20 @@ def tournament(
             machine.tick()
 
     winners = [machine for machine in machines if not machine.halted]
+    winner_names = [m.name for m in winners]
 
-    if not winners:
-        print("no one won")
-    elif len(winners) == 1:
-        print(winners[0].name, "won!")
-    else:
-        print(
-            "It was a draw between the following:",
-            ", ".join(machine.name for machine in machines),
-        )
+    if not quiet:
+        if not winners:
+            print("no one won")
+        elif len(winners) == 1:
+            print(winners[0].name, "won!")
+        else:
+            print(
+                "It was a draw between the following:",
+                ", ".join(machine.name for machine in machines),
+            )
+
+    return winner_names
 
 
 def read_program(filename: str) -> Sequence[Word]:
@@ -105,6 +111,11 @@ def read_program(filename: str) -> Sequence[Word]:
         contents = f.read()
 
     return [Word(i) for (i,) in struct.iter_unpack(">H", contents)]
+
+
+def _run_one(args: tuple[dict[str, Sequence[Word]], int, int]) -> list[str]:
+    programs, seed, max_steps = args
+    return tournament(programs, seed=seed, max_steps=max_steps, log=False, quiet=True)
 
 
 def main(arguments: Sequence[str] | None = None) -> int:
@@ -122,6 +133,20 @@ def main(arguments: Sequence[str] | None = None) -> int:
         "--no-logs",
         action="store_true",
         help="Disable logging of machine state.",
+    )
+    parser.add_argument(
+        "--n-seeds",
+        type=int,
+        metavar="INT",
+        default=1,
+        help="Run this many seeds (starting from --seed) and print aggregate W/D/L stats.",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        metavar="INT",
+        default=None,
+        help="Worker processes for --n-seeds runs (default: cpu count).",
     )
 
     args = parser.parse_args(arguments)
@@ -148,7 +173,31 @@ def main(arguments: Sequence[str] | None = None) -> int:
 
         programs[program_name] = read_program(filename)
 
-    tournament(programs, seed=args.seed, max_steps=args.max_steps, log=not args.no_logs)
+    if args.n_seeds == 1:
+        tournament(programs, seed=args.seed, max_steps=args.max_steps, log=not args.no_logs)
+        return 0
+
+    tasks = [(programs, args.seed + i, args.max_steps) for i in range(args.n_seeds)]
+    with multiprocessing.Pool(args.workers) as pool:
+        results = pool.map(_run_one, tasks)
+
+    wins: dict[str, int] = {name: 0 for name in programs}
+    draws = 0
+    no_winner = 0
+    for winner_names in results:
+        if len(winner_names) == 1:
+            wins[winner_names[0]] += 1
+        elif len(winner_names) == 0:
+            no_winner += 1
+        else:
+            draws += 1
+
+    n = args.n_seeds
+    for name, count in wins.items():
+        print(f"{name} wins: {count}/{n} ({count / n * 100:.1f}%)")
+    print(f"draws:     {draws}/{n} ({draws / n * 100:.1f}%)")
+    if no_winner:
+        print(f"no winner: {no_winner}/{n} ({no_winner / n * 100:.1f}%)")
     return 0
 
 
