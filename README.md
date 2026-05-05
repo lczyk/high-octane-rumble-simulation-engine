@@ -225,10 +225,7 @@ uv run blen-rumble --seed 0 --max-steps 100000 --no-logs runner.blc bomber.blc
 runner won!
 ```
 
-bomber's strategy depends heavily on where the random program placement drops
-each combatant; against a runner that walks straight into bomber's own loop
-body, bomber can end up running its own halts before runner does. try other
-seeds:
+try other seeds:
 
 ```
 uv run blen-rumble --seed 1 --max-steps 100000 --no-logs runner.blc bomber.blc
@@ -237,6 +234,30 @@ uv run blen-rumble --seed 1 --max-steps 100000 --no-logs runner.blc bomber.blc
 ```
 It was a draw between the following: runner, bomber
 ```
+
+### Why does runner keep beating bomber?
+
+Programs share one block of memory at randomly chosen offsets. Bomber lives at
+some `bomber_offset`; runner lives at some `runner_offset`. When runner's
+program counter walks past the end of its noop slide, it keeps drifting
+through real memory one cell at a time (most of which is zero, i.e. noop) and
+eventually wanders straight into bomber's instruction sequence.
+
+At that point, runner starts *executing bomber's code* - but with runner's own
+register state and runner's own offset. Runner faithfully rebuilds the halt
+encoding in `R2`, the address counters in `R3` / `R4`, and falls into bomber's
+tight write loop. Runner is now an inadvertent bomber, scattering halts across
+memory at addresses computed against `runner_offset` instead of
+`bomber_offset`.
+
+A few thousand iterations later, runner's `R3` has incremented far enough that
+the next halt-store lands inside bomber's actual loop body in real memory.
+Bomber's next read of its own loop returns halt. Bomber halts. Runner, still
+quietly drifting (or, depending on where its `PC` is at that moment, still
+running stolen code) is the sole survivor.
+
+bomber doesn't lose because its strategy is wrong - bomber loses because its
+strategy is contagious.
 
 ### FAQ: How do I do X?
 
