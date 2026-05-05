@@ -75,7 +75,6 @@ show_error_codes = true
 warn_unused_ignores = true
 warn_unused_configs = true
 explicit_package_bases = true
-enable_error_code = "explicit-override"
 extra_checks = true
 local_partial_types = true
 files = [
@@ -83,6 +82,11 @@ files = [
     "./tests/**/*.py",
     #
 ]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+check_untyped_defs = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"

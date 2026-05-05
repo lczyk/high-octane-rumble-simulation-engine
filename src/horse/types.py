@@ -1,4 +1,5 @@
-from typing import NewType, Sequence
+from collections.abc import Sequence
+from typing import NewType
 
 WORD_N_BITS = 16
 MAX_WORD = (1 << WORD_N_BITS) - 1
@@ -31,6 +32,7 @@ def nibbles_to_word(nibbles: Sequence[Nibble], /) -> Word:
             for nibble, d in zip(
                 nibbles,
                 range(WORD_N_BITS - NIBBLE_N_BITS, 0 - NIBBLE_N_BITS, -NIBBLE_N_BITS),
+                strict=False,
             )
         )
     )

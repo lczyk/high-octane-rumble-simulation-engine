@@ -1,19 +1,19 @@
-from typing import (
-    Callable,
-    Iterator,
-    MutableMapping,
-    NewType,
-    Protocol,
-)
-import typing
-
 import dataclasses
 import enum
 import logging
 import operator
+import os
+import string
+import typing
+from collections.abc import Callable, Iterator, MutableMapping
+from typing import (
+    NewType,
+    Protocol,
+    cast,
+)
 
-from horse.types import Word
 import horse.types
+from horse.types import Word
 
 
 class Register(enum.Enum):
@@ -84,7 +84,7 @@ class NonBinaryOpCode(enum.Enum):
     # 15
 
 
-Address = NewType("Address", Word)
+Address = NewType("Address", int)  # NewType can't wrap NewType; Word is also NewType[int].
 Memory = MutableMapping[Address, Word]
 
 SignedInteger = NewType("SignedInteger", int)
@@ -106,8 +106,8 @@ def signed_integer_to_word(signed_integer: SignedInteger, /) -> Word:
 class RegisterMappingWrapper(MutableMapping[Register, Word]):
     wrapped_mapping: MutableMapping[Register, Word]
 
-    def __post_init__(self):
-        self.wrapped_mapping[Register.ZERO_REGISTER] = 0
+    def __post_init__(self) -> None:
+        self.wrapped_mapping[Register.ZERO_REGISTER] = Word(0)
 
     def __getitem__(self, key: Register) -> Word:
         return self.wrapped_mapping[key]
@@ -127,6 +127,9 @@ class RegisterMappingWrapper(MutableMapping[Register, Word]):
         return iter(self.wrapped_mapping)
 
 
+_NAME_ALPHABET = string.ascii_letters + string.digits + "-_"
+
+
 @dataclasses.dataclass
 class Machine:
     name: str
@@ -135,25 +138,43 @@ class Machine:
         default_factory=lambda: {register: Word(0) for register in Register}
     )
     halted: bool = False
+    logger: logging.Logger = dataclasses.field(default=logging.getLogger("horse"))
 
     def __post_init__(self) -> None:
         self.registers = RegisterMappingWrapper(self.registers)
+
+        assert all(char in _NAME_ALPHABET for char in self.name), f"Invalid character in machine name: {self.name}"
+        assert len(self.name) > 0, "Machine name must be non-empty"
+
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(logging.INFO)
-        handler = logging.FileHandler(self.name + ".log")
+
+        self._add_log_file_handler()
+
+    def _add_log_file_handler(self) -> None:
+        # File logging is opt-in via HORSE_LOG_DIR env var.
+        # NOTE: unset = no file handler, keeps tests from littering cwd with log files.
+        log_dir = os.environ.get("HORSE_LOG_DIR")
+        if not log_dir or not os.path.isdir(log_dir):
+            return
+
+        if any(isinstance(h, logging.FileHandler) for h in self.logger.handlers):
+            return
+
+        filename = os.path.join(log_dir, self.name + ".log")
+        # Delay open until first record so empty runs don't create files.
+        handler = logging.FileHandler(filename, delay=True)
         handler.setFormatter(logging.Formatter("%(message)s"))
         self.logger.addHandler(handler)
 
     def tick(self) -> None:
         instruction_address = Address(self.registers[Register.PROGRAM_COUNTER])
 
-        self.logger.info(
-            "loading instruction at address {}".format(instruction_address)
-        )
+        self.logger.info(f"loading instruction at address {instruction_address}")
         instruction_as_word = self.memory[instruction_address]
         instruction = parse(instruction_as_word)
 
-        self.logger.info("executing instruction {}".format(instruction))
+        self.logger.info(f"executing instruction {instruction}")
         instruction_as_word = self.memory[instruction_address]
         instruction(self)
 
@@ -272,7 +293,8 @@ class BinaryOperation(Instruction):
     def __call__(self, machine: Machine) -> None:
         func = BINARY_OPERATIONS[self.opcode]
         machine.registers[self.result] = func(
-            machine.registers[self.operand0], machine.registers[self.operand1],
+            machine.registers[self.operand0],
+            machine.registers[self.operand1],
         )
 
     def to_word(self) -> Word:
@@ -329,10 +351,13 @@ def bitwise_xor(operand0: Word, operand1: Word, /) -> Word:
 def _signed_binop(
     func: Callable[[SignedInteger, SignedInteger], SignedInteger],
 ) -> Callable[[Word, Word], Word]:
-    def signed_binop(operand0: Word, operand1: Word, /, func=func):
-        return signed_integer_to_word(
-            func(word_to_signed_integer(operand0), word_to_signed_integer(operand1))
-        )
+    def signed_binop(
+        operand0: Word,
+        operand1: Word,
+        /,
+        func: Callable[[SignedInteger, SignedInteger], SignedInteger] = func,
+    ) -> Word:
+        return signed_integer_to_word(func(word_to_signed_integer(operand0), word_to_signed_integer(operand1)))
 
     return signed_binop
 
@@ -393,17 +418,18 @@ def convert_to_bool(operand: Word, /) -> Word:
 
 
 def _signed_unop(
-    func: Callable[[SignedInteger], SignedInteger]
+    func: Callable[[SignedInteger], SignedInteger],
 ) -> Callable[[Word], Word]:
-    def signed_unop(operand: Word, /, func=func) -> Word:
+    def signed_unop(operand: Word, /, func: Callable[[SignedInteger], SignedInteger] = func) -> Word:
         return signed_integer_to_word(func(word_to_signed_integer(operand)))
 
     return signed_unop
 
 
-bitwise_not = _signed_unop(operator.invert)
-negate = _signed_unop(operator.neg)
-posit = _signed_unop(operator.pos)
+# TODO: cast appeases mypy; operator.{invert,neg,pos} resolve to generic _Supports* protocols.
+bitwise_not = _signed_unop(cast(Callable[[SignedInteger], SignedInteger], operator.invert))
+negate = _signed_unop(cast(Callable[[SignedInteger], SignedInteger], operator.neg))
+posit = _signed_unop(cast(Callable[[SignedInteger], SignedInteger], operator.pos))
 
 
 UNARY_OPERATIONS = {
@@ -435,7 +461,7 @@ def parse(word: Word) -> Instruction:
     elif opcode in BINARY_OPERATIONS:
         return parse_binary_operation(word)
     else:
-        assert False, "This should never happen."
+        raise AssertionError("This should never happen.")
 
 
 def parse_binary_operation(word: Word) -> Instruction:
@@ -475,4 +501,4 @@ def parse_non_binary_operation(word: Word) -> Instruction:
         result = Register(nibbles[3])
         return UnaryOperation(opcode, operand, result)
     else:
-        assert False, "This should never happen."
+        raise AssertionError("This should never happen.")

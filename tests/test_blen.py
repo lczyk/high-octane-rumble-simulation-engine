@@ -1,11 +1,10 @@
-import collections
+from collections import defaultdict
 
 import hypothesis
 import hypothesis.strategies as st
 
 import horse.blen
 import horse.types
-
 
 words = st.integers(0, horse.types.MAX_WORD)
 bytes = st.integers(0, horse.types.MAX_BYTE)
@@ -18,13 +17,13 @@ in_range_signed_integers = st.integers(MIN_SIGNED_INT, MAX_SIGNED_INT)
 binary_operations = st.sampled_from(tuple(horse.blen.BINARY_OPERATIONS.values()))
 unary_operations = st.sampled_from(tuple(horse.blen.UNARY_OPERATIONS.values()))
 
-memories = st.dictionaries(words, words).map(lambda d: collections.defaultdict(int, d))
+memories = st.dictionaries(words, words).map(lambda d: defaultdict(int, d))
+names = st.text(min_size=1, alphabet=horse.blen._NAME_ALPHABET)
 machines = st.builds(
     horse.blen.Machine,
+    name=names,
     memory=memories,
-    registers=st.fixed_dictionaries(
-        {register: words for register in horse.blen.Register}
-    ),
+    registers=st.fixed_dictionaries({register: words for register in horse.blen.Register}),
 )
 
 
@@ -83,6 +82,11 @@ def test_parse_defined_for_all_words(word):
 
 
 @hypothesis.given(machines)
-def test_register_zero_always_zero(machine):
+def test_register_zero_always_zero(machine: horse.blen.Machine):
+    # Remove the file handler. We can't do this with a fixture because
+    # hypothesis doesn't play nice with fixtures, and caplog is not
+    # available as a context manager.
+    machine.logger.handlers = []
+
     machine.tick()
     assert machine.registers[horse.blen.Register.ZERO_REGISTER] == 0
