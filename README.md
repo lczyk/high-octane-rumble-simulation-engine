@@ -218,21 +218,24 @@ Compile and rumble:
 ```
 uv run blenc --input examples/runner.bln --output runner.blc
 uv run blenc --input examples/bomber.bln --output bomber.blc
-uv run blen-rumble --seed 0 --max-steps 100000 --no-logs runner.blc bomber.blc
+uv run blen-rumble --seed 0 --max-steps 1000000 --no-logs runner.blc bomber.blc
 ```
 
 ```
-runner won!
+bomber won!
 ```
 
-try other seeds:
+Run many seeds in parallel for aggregate stats:
 
 ```
-uv run blen-rumble --seed 1 --max-steps 100000 --no-logs runner.blc bomber.blc
+uv run blen-rumble --n-seeds 20 --max-steps 1000000 --seed 0 runner.blc bomber.blc
 ```
 
 ```
-It was a draw between the following: runner, bomber
+bomber wins: 6/20 (30.0%)
+runner wins: 9/20 (45.0%)
+draws:     0/20 (0.0%)
+no winner: 5/20 (25.0%)
 ```
 
 ### Why does runner keep beating bomber?
